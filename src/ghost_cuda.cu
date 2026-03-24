@@ -559,7 +559,7 @@ void launch_ghost_cuda(
             if (out_error)
                 *out_error = "FlareSim requires an NVIDIA GPU with an up-to-date driver. "
                              "The installed CUDA driver is too old — please update your "
-                             "NVIDIA driver (520 or newer recommended).";
+                             "NVIDIA driver (525 or newer required).";
             return;
         }
         if (ce == cudaErrorNoDevice || device_count == 0) {

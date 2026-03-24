@@ -9,7 +9,7 @@
 # Output: dist\nuke14\FlareSim.dll, dist\nuke15\FlareSim.dll, etc.
 
 param(
-    [int[]]  $Versions = @(14, 15, 16, 17),
+    [int[]]  $Versions = @(13, 14, 15, 16, 17),
     [string] $NukeRoot = "C:\Program Files",
     [string] $DistDir  = "$PSScriptRoot\dist"
 )

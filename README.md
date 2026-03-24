@@ -50,8 +50,18 @@ under one second per frame for standard HD/2K images.
 
 ## Installation
 
+**Windows:**
+
 1. Copy `FlareSim.dll` to a directory on your `NUKE_PATH`,
    for example `%USERPROFILE%/.nuke/plugins/`.
+
+**Linux:**
+
+1. Copy `FlareSim.so` to a directory on your `NUKE_PATH`,
+   for example `~/.nuke/plugins/`.
+
+**Both platforms:**
+
 2. Copy `menu.py` to the same directory.
    If you already have a `menu.py` there, add this line to it instead:
    ```python
@@ -61,8 +71,11 @@ under one second per frame for standard HD/2K images.
    knob at one of the `.lens` files.
 4. Restart Nuke. `FlareSim` will appear in the node menu under **Filter**.
 
-**Requirements:** Windows, Nuke 16, an NVIDIA GPU (any card from 2012 onward,
-compute capability 3.0+), CUDA runtime 13.
+**Requirements:**
+- **Platforms:** Windows, Linux
+- **Nuke versions:** 13, 14, 15, 16, 17
+- **GPU:** Any NVIDIA GPU from Maxwell (GTX 900 series, 2014) onwards
+- **NVIDIA driver:** 525 or newer (built against CUDA Toolkit 12.x)
 
 ---
 

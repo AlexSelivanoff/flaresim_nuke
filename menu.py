@@ -1,7 +1,7 @@
 # FlareSim — Nuke node menu registration
 #
 # Copy this file (and FlareSim_LensBrowser.py) to the same directory as
-# FlareSim.dll on your NUKE_PATH.
+# FlareSim.dll (Windows) or FlareSim.so (Linux) on your NUKE_PATH.
 # If you already have a menu.py in that directory, add these lines to it
 # instead of replacing the file.
 #
