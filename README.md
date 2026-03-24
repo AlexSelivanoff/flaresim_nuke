@@ -50,26 +50,9 @@ under one second per frame for standard HD/2K images.
 
 ## Installation
 
-**Windows:**
+See **[INSTALL.md](INSTALL.md)** for a full step-by-step guide, including multi-version setups and troubleshooting.
 
-1. Copy `FlareSim.dll` to a directory on your `NUKE_PATH`,
-   for example `%USERPROFILE%/.nuke/plugins/`.
-
-**Linux:**
-
-1. Copy `FlareSim.so` to a directory on your `NUKE_PATH`,
-   for example `~/.nuke/plugins/`.
-
-**Both platforms:**
-
-2. Copy `menu.py` to the same directory.
-   If you already have a `menu.py` there, add this line to it instead:
-   ```python
-   nuke.menu('Nodes').addCommand('Filter/FlareSim', 'nuke.createNode("FlareSim")')
-   ```
-3. Copy the `lenses/` folder somewhere accessible and point the **Lens File**
-   knob at one of the `.lens` files.
-4. Restart Nuke. `FlareSim` will appear in the node menu under **Filter**.
+**Quick version:** unzip the release into a folder inside `~/.nuke/plugins/`, add `nuke.pluginAddPath('./plugins')` to your `~/.nuke/init.py`, and restart Nuke.
 
 **Requirements:**
 - **Platforms:** Windows, Linux
