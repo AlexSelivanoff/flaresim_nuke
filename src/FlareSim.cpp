@@ -241,6 +241,11 @@ public:
   int downsample_;
   int cluster_radius_; // pixels; 0 = off
 
+  // manual light position
+  bool use_light_pos_;
+  float light_pos_[2];
+  float light_color_[3];
+
   // Preview mode — fast low-quality settings for interactive tweaking
   bool preview_mode_;
   int preview_ray_grid_;
@@ -355,7 +360,8 @@ public:
         starburst_scale_(0.15f), aperture_blades_(0), aperture_rotation_(0.0f),
         pupil_jitter_(0), jitter_seed_(0), jitter_auto_seed_(true),
         spectral_idx_(0), show_sources_(false), output_mode_(0),
-        input_channelset_(Mask_RGB) {
+        input_channelset_(Mask_RGB), use_light_pos_(false),
+        light_pos_{100.0f, 100.0f}, light_color_{1.0f, 1.0f, 1.0f} {
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
       pair_enabled_[k] = true;
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
@@ -468,7 +474,8 @@ public:
 
   // ---- Knobs ----
   void knobs(Knob_Callback f) override {
-    Input_ChannelSet_knob(f, &input_channelset_, 0, "in_channels", "Input Channels");
+    Input_ChannelSet_knob(f, &input_channelset_, 0, "in_channels",
+                          "Input Channels");
     Tooltip(f, "Channels to read bright light sources from. "
                "Default is RGB. Change to e.g. diffuse.rgb or emission.rgb "
                "to drive the flare from a specific AOV.");
@@ -546,6 +553,17 @@ public:
            "brightest highlights "
            "in pixels is a good starting point (e.g. 20-50 for a typical "
            "headlight).");
+    Divider(f, "Manual Light Position");
+    Bool_knob(f, &use_light_pos_, "use_light_pos", "Use Light Position");
+    Tooltip(f, "When enabled, the flare is driven by the position and colour "
+               "specified below, instead of being automatically extracted from "
+               "the input image.");
+    XY_knob(f, light_pos_, "light_pos", "Light Position (px)");
+    Tooltip(f, "Position of the light source in pixel coordinates. Only used "
+               "when Manual Light Position is enabled.");
+    Color_knob(f, light_color_, "light_color", "Light Color");
+    Tooltip(f, "Colour of the light source. Only used when Manual Light "
+               "Position is enabled.");
 
     Divider(f, "Preview Mode");
     Bool_knob(f, &preview_mode_, "preview_mode", "Enable Preview Mode");
@@ -992,69 +1010,87 @@ public:
     std::vector<BrightPixel> sources;
     sources.reserve(1024);
 
-    for (int dyi = 0; dyi < dh; ++dyi) {
-      for (int dxi = 0; dxi < dw; ++dxi) {
-        const int cnt = blk_cnt[dyi * dw + dxi];
-        if (cnt == 0)
-          continue;
+    if (use_light_pos_) {
+      printf("FlareSim: using manual light position (%.1f, %.1f) and color "
+             "(%.2f, %.2f, %.2f)\n",
+             light_pos_[0], light_pos_[1], light_color_[0], light_color_[1],
+             light_color_[2]);
+      // Manual light position overrides auto source detection. Use the user-
+      // specified position and colour as a single bright source.
+      const float ndc_x = (light_pos_[0] - fmt_cx) / pending_fmt_w_;
+      const float ndc_y = (light_pos_[1] - fmt_cy) / pending_fmt_h_;
+      BrightPixel bp_out;
+      bp_out.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
+      bp_out.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
+      bp_out.r = light_color_[0] * flare_gain_;
+      bp_out.g = light_color_[1] * flare_gain_;
+      bp_out.b = light_color_[2] * flare_gain_;
+      sources.push_back(bp_out);
+    } else {
+      for (int dyi = 0; dyi < dh; ++dyi) {
+        for (int dxi = 0; dxi < dw; ++dxi) {
+          const int cnt = blk_cnt[dyi * dw + dxi];
+          if (cnt == 0)
+            continue;
 
-        float r = blk_r[dyi * dw + dxi] / cnt;
-        float g = blk_g[dyi * dw + dxi] / cnt;
-        float b = blk_b[dyi * dw + dxi] / cnt;
-        float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
+          float r = blk_r[dyi * dw + dxi] / cnt;
+          float g = blk_g[dyi * dw + dxi] / cnt;
+          float b = blk_b[dyi * dw + dxi] / cnt;
+          float luma = 0.2126f * r + 0.7152f * g + 0.0722f * b;
 
-        // Source intensity cap
-        if (source_cap_ > 0.0f && luma > source_cap_) {
-          float scale = source_cap_ / luma;
-          r *= scale;
-          g *= scale;
-          b *= scale;
-          luma = source_cap_;
-        }
+          // Source intensity cap
+          if (source_cap_ > 0.0f && luma > source_cap_) {
+            float scale = source_cap_ / luma;
+            r *= scale;
+            g *= scale;
+            b *= scale;
+            luma = source_cap_;
+          }
 
-        // Mask: scale intensity and effective luma by average mask value
-        const float mask_avg = blk_mask[dyi * dw + dxi] / cnt;
-        luma *= mask_avg;
-        r *= mask_avg;
-        g *= mask_avg;
-        b *= mask_avg;
+          // Mask: scale intensity and effective luma by average mask value
+          const float mask_avg = blk_mask[dyi * dw + dxi] / cnt;
+          luma *= mask_avg;
+          r *= mask_avg;
+          g *= mask_avg;
+          b *= mask_avg;
 
-        if (luma < threshold_)
-          continue;
+          if (luma < threshold_)
+            continue;
 
-        const int bx0 = x0 + dxi * ds;
-        const int bx1 = std::min(bx0 + ds, x1);
-        const int by0 = y0 + dyi * ds;
-        const int by1 = std::min(by0 + ds, y1);
-        const float cx = (bx0 + bx1) * 0.5f;
-        const float cy = (by0 + by1) * 0.5f;
+          const int bx0 = x0 + dxi * ds;
+          const int bx1 = std::min(bx0 + ds, x1);
+          const int by0 = y0 + dyi * ds;
+          const int by1 = std::min(by0 + ds, y1);
+          const float cx = (bx0 + bx1) * 0.5f;
+          const float cy = (by0 + by1) * 0.5f;
 
-        const float ndc_x = (cx - fmt_cx) / pending_fmt_w_;
-        const float ndc_y = (cy - fmt_cy) / pending_fmt_h_;
+          const float ndc_x = (cx - fmt_cx) / pending_fmt_w_;
+          const float ndc_y = (cy - fmt_cy) / pending_fmt_h_;
 
-        BrightPixel bp_out;
-        bp_out.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
-        bp_out.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
-        bp_out.r = r;
-        bp_out.g = g;
-        bp_out.b = b;
-        sources.push_back(bp_out);
+          BrightPixel bp_out;
+          bp_out.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
+          bp_out.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
+          bp_out.r = r;
+          bp_out.g = g;
+          bp_out.b = b;
+          sources.push_back(bp_out);
 
-        // Haze: fill the entire source block with the source colour.
-        // Using block-fill (not point-splat) gives the wide blur
-        // enough initial coverage to stay visible after spreading.
-        if (haze_gain_ > 0.0f) {
-          const int hbx0 = std::max(0, bx0 - x0);
-          const int hbx1 = std::min(w, bx1 - x0);
-          const int hby0 = std::max(0, by0 - y0);
-          const int hby1 = std::min(h, by1 - y0);
-          for (int py = hby0; py < hby1; ++py)
-            for (int px = hbx0; px < hbx1; ++px) {
-              const size_t idx = (size_t)py * w + px;
-              haz_r[idx] += r;
-              haz_g[idx] += g;
-              haz_b[idx] += b;
-            }
+          // Haze: fill the entire source block with the source colour.
+          // Using block-fill (not point-splat) gives the wide blur
+          // enough initial coverage to stay visible after spreading.
+          if (haze_gain_ > 0.0f) {
+            const int hbx0 = std::max(0, bx0 - x0);
+            const int hbx1 = std::min(w, bx1 - x0);
+            const int hby0 = std::max(0, by0 - y0);
+            const int hby1 = std::min(h, by1 - y0);
+            for (int py = hby0; py < hby1; ++py)
+              for (int px = hbx0; px < hbx1; ++px) {
+                const size_t idx = (size_t)py * w + px;
+                haz_r[idx] += r;
+                haz_g[idx] += g;
+                haz_b[idx] += b;
+              }
+          }
         }
       }
     }
