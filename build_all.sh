@@ -30,15 +30,17 @@ VERSIONS="13 14 15 16 17"
 NUKE_ROOT="/usr/local"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR="${SCRIPT_DIR}/dist"
+CUDA_VER="12.8"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --versions)  VERSIONS="$2";  shift 2 ;;
         --nuke-root) NUKE_ROOT="$2"; shift 2 ;;
         --dist-dir)  DIST_DIR="$2";  shift 2 ;;
+        --cuda-ver)  CUDA_VER="$2";  shift 2 ;;
         *)
             echo "Unknown argument: $1" >&2
-            echo "Usage: $0 [--versions \"13 14 15 16 17\"] [--nuke-root /usr/local] [--dist-dir ./dist]" >&2
+            echo "Usage: $0 [--versions \"13 14 15 16 17\"] [--nuke-root /usr/local] [--dist-dir ./dist] [--cuda-ver <version>]" >&2
             exit 1 ;;
     esac
 done
@@ -50,14 +52,17 @@ skipped=()
 echo ""
 echo "FlareSim multi-version build (Linux)"
 echo "Output: ${DIST_DIR}"
+echo "CUDA Version: ${CUDA_VER}"
 echo ""
+
+CUDA_COMPILER="/usr/local/cuda-${CUDA_VER}/bin/nvcc"
 
 for VERSION in $VERSIONS; do
 
     echo "--- Nuke ${VERSION} ---"
 
     # Find Nuke installation (e.g. "Nuke16.0v1") — pick newest patch if multiple exist.
-    NUKE_DIR=$(find "${NUKE_ROOT}" -maxdepth 1 -type d -name "Nuke${VERSION}.*" 2>/dev/null \
+    NUKE_DIR=$(find "${NUKE_ROOT}" -maxdepth 1 -type d -name "nuke${VERSION}.*" 2>/dev/null \
                | sort -V | tail -1)
 
     if [[ -z "${NUKE_DIR}" ]]; then
@@ -103,6 +108,7 @@ for VERSION in $VERSIONS; do
         "${ABI_FLAG}" \
         "-DNDK_ROOT=${NDK_ROOT}" \
         "-DNUKE_LIB_DIR=${NUKE_LIB_DIR}" \
+        "-DCMAKE_CUDA_COMPILER=${CUDA_COMPILER}" \
         -S "${SCRIPT_DIR}" \
         -B "${BUILD_DIR}"; then
         echo "  CMake configure FAILED"
