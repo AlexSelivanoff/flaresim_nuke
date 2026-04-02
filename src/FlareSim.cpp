@@ -244,6 +244,7 @@ public:
   // manual light position
   bool use_light_pos_;
   float light_pos_[2];
+  float light_size_px_;
   float light_color_[3];
 
   // Preview mode — fast low-quality settings for interactive tweaking
@@ -361,7 +362,8 @@ public:
         pupil_jitter_(0), jitter_seed_(0), jitter_auto_seed_(true),
         spectral_idx_(0), show_sources_(false), output_mode_(0),
         input_channelset_(Mask_RGB), use_light_pos_(false),
-        light_pos_{100.0f, 100.0f}, light_color_{1.0f, 1.0f, 1.0f} {
+        light_pos_{100.0f, 100.0f}, light_color_{1.0f, 1.0f, 1.0f},
+        light_size_px_(10.0f) {
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
       pair_enabled_[k] = true;
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
@@ -553,7 +555,7 @@ public:
            "brightest highlights "
            "in pixels is a good starting point (e.g. 20-50 for a typical "
            "headlight).");
-    Divider(f, "Manual Light Position");
+    Divider(f, "Light Position");
     Bool_knob(f, &use_light_pos_, "use_light_pos", "Use Light Position");
     Tooltip(f, "When enabled, the flare is driven by the position and colour "
                "specified below, instead of being automatically extracted from "
@@ -561,6 +563,10 @@ public:
     XY_knob(f, light_pos_, "light_pos", "Light Position (px)");
     Tooltip(f, "Position of the light source in pixel coordinates. Only used "
                "when Manual Light Position is enabled.");
+    Float_knob(f, &light_size_px_, "light_size", "Light Size (px)");
+    Tooltip(f,
+            "Size of the light source in pixels. Only used when Manual Light "
+            "Position is enabled.");
     Color_knob(f, light_color_, "light_color", "Light Color");
     Tooltip(f, "Colour of the light source. Only used when Manual Light "
                "Position is enabled.");
@@ -1019,13 +1025,27 @@ public:
       // specified position and colour as a single bright source.
       const float ndc_x = (light_pos_[0] - fmt_cx) / pending_fmt_w_;
       const float ndc_y = (light_pos_[1] - fmt_cy) / pending_fmt_h_;
-      BrightPixel bp_out;
-      bp_out.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
-      bp_out.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
-      bp_out.r = light_color_[0] * flare_gain_;
-      bp_out.g = light_color_[1] * flare_gain_;
-      bp_out.b = light_color_[2] * flare_gain_;
-      sources.push_back(bp_out);
+      const float half_size = light_size_px_ * 0.5f;
+      for (int sx = 0; sx <= light_size_px_; ++sx) {
+        for (int sy = 0; sy <= light_size_px_; ++sy) {
+          const float off_x = (sx - half_size);
+          const float off_y = (sy - half_size);
+          const float dist = std::sqrt(off_x * off_x + off_y * off_y);
+          if (dist > half_size)
+            continue;
+          // Linear falloff: 1 at centre, 0 at half_size distance.
+          const float falloff = (half_size > 0.0f) ? 1.0f - dist / half_size : 1.0f;
+          const float off_ndc_x = off_x / pending_fmt_w_;
+          const float off_ndc_y = off_y / pending_fmt_h_;
+          BrightPixel bp_out;
+          bp_out.angle_x = std::atan((ndc_x + off_ndc_x) * 2.0f * tan_half_h);
+          bp_out.angle_y = std::atan((ndc_y + off_ndc_y) * 2.0f * tan_half_v);
+          bp_out.r = light_color_[0] * flare_gain_ * falloff;
+          bp_out.g = light_color_[1] * flare_gain_ * falloff;
+          bp_out.b = light_color_[2] * flare_gain_ * falloff;
+          sources.push_back(bp_out);
+        }
+      }
     } else {
       for (int dyi = 0; dyi < dh; ++dyi) {
         for (int dxi = 0; dxi < dw; ++dxi) {
