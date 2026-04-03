@@ -727,11 +727,11 @@ public:
       }
       return 1;
     }
-    if (k->is("preview_mode")) {
-      knob("preview_ray_grid")->enable(preview_mode_);
-      knob("preview_max_sources")->enable(preview_mode_);
-      knob("preview_downsample")->enable(preview_mode_);
-      knob("preview_spectral")->enable(preview_mode_);
+    if (k->is("use_light_pos")) {
+      const bool use_pos = use_light_pos_;
+      knob("light_pos")->enable(use_pos);
+      knob("light_size")->enable(use_pos);
+      knob("light_color")->enable(use_pos);
       return 1;
     }
     if (k->is("fov_use_sensor") || k->is("fov_auto_v")) {
