@@ -18,6 +18,7 @@
 #include "DDImage/Iop.h"
 #include "DDImage/Knobs.h"
 #include "DDImage/Row.h"
+#include "DDImage/Thread.h"
 
 #include "ghost.h"
 #include "ghost_cuda.h"
@@ -30,7 +31,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -348,7 +348,7 @@ public:
   int pending_fmt_h_ = 0;
   // Snapshot of all_lens_pairs_ for do_compute() (safe from _validate() race).
   std::vector<GhostPair> pending_all_pairs_;
-  std::mutex compute_mutex_;
+  Lock compute_mutex_;
 
   // ---- Constructor ----
   explicit FlareSim(Node *node)
@@ -835,7 +835,7 @@ public:
     }
 
     {
-      std::lock_guard<std::mutex> lock(compute_mutex_);
+      Guard lock(compute_mutex_);
       if (!pending_cuda_error_.empty()) {
         std::string msg;
         msg.swap(pending_cuda_error_);
@@ -1327,7 +1327,7 @@ public:
   // ---- engine ----
   void engine(int y, int x, int r, ChannelMask channels, Row &row) override {
     {
-      std::lock_guard<std::mutex> lock(compute_mutex_);
+      Guard lock(compute_mutex_);
       if (needs_compute_) {
         needs_compute_ = false;
         do_compute();
