@@ -11,14 +11,15 @@
 param(
     [int[]]  $Versions = @(13, 14, 15, 16, 17),
     [string] $NukeRoot = "C:\Program Files",
-    [string] $DistDir  = "$PSScriptRoot\dist"
+    [string] $DistDir = "$PSScriptRoot\dist",
+    [string] $CudaVer = "12.8"
 )
 
 $ErrorActionPreference = "Continue"
 $scriptDir = $PSScriptRoot
 $succeeded = @()
-$failed    = @()
-$skipped   = @()
+$failed = @()
+$skipped = @()
 
 Write-Host ""
 Write-Host "FlareSim multi-version build" -ForegroundColor Cyan
@@ -31,8 +32,8 @@ foreach ($version in $Versions) {
 
     # Find Nuke installation (e.g. "Nuke16.0v1") - pick newest patch if multiple
     $nukeDir = Get-ChildItem $NukeRoot -Directory -Filter "Nuke${version}.*" |
-               Sort-Object Name -Descending |
-               Select-Object -First 1
+    Sort-Object Name -Descending |
+    Select-Object -First 1
 
     if (-not $nukeDir) {
         Write-Host "  Nuke $version not found under $NukeRoot - skipping." -ForegroundColor Yellow
@@ -40,8 +41,8 @@ foreach ($version in $Versions) {
         continue
     }
 
-    $nukePath   = $nukeDir.FullName
-    $ndkRoot    = Join-Path $nukePath "include"
+    $nukePath = $nukeDir.FullName
+    $ndkRoot = Join-Path $nukePath "include"
     $nukeLibDir = $nukePath
 
     if (-not (Test-Path (Join-Path $ndkRoot "DDImage\Iop.h"))) {
@@ -103,9 +104,9 @@ foreach ($version in $Versions) {
 # Summary
 Write-Host ""
 Write-Host "--- Summary ---" -ForegroundColor Cyan
-if ($succeeded.Count -gt 0) { Write-Host "  Built:   Nuke $($succeeded -join ', ')" -ForegroundColor Green  }
-if ($skipped.Count   -gt 0) { Write-Host "  Skipped: Nuke $($skipped   -join ', ')" -ForegroundColor Yellow }
-if ($failed.Count    -gt 0) { Write-Host "  Failed:  Nuke $($failed    -join ', ')" -ForegroundColor Red    }
+if ($succeeded.Count -gt 0) { Write-Host "  Built:   Nuke $($succeeded -join ', ')" -ForegroundColor Green }
+if ($skipped.Count -gt 0) { Write-Host "  Skipped: Nuke $($skipped   -join ', ')" -ForegroundColor Yellow }
+if ($failed.Count -gt 0) { Write-Host "  Failed:  Nuke $($failed    -join ', ')" -ForegroundColor Red }
 Write-Host ""
 
 if ($failed.Count -gt 0) { exit 1 } else { exit 0 }
