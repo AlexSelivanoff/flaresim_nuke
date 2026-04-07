@@ -93,6 +93,15 @@ static const char *const kPresetNames[] = {
 // Blurs buf in-place; tmp is a scratch buffer (resized as needed).
 // ---------------------------------------------------------------------------
 
+float clamp(float v, float low, float high) {
+  return std::max(low, std::min(high, v));
+}
+
+float smoothstep(float v, float low, float high) {
+  float t = clamp((v - low) / (high - low), 0.0f, 1.0f);
+  return t * t * (3.0f - 2.0f * t);
+}
+
 static void box_blur(float *buf, int w, int h, int radius, int passes,
                      std::vector<float> &tmp) {
   if (radius < 1 || passes < 1)
@@ -244,14 +253,9 @@ public:
   // manual light position
   bool use_light_pos_;
   float light_pos_[2];
+  float light_size_px_;
   float light_color_[3];
 
-  // Preview mode — fast low-quality settings for interactive tweaking
-  bool preview_mode_;
-  int preview_ray_grid_;
-  int preview_max_sources_;
-  int preview_downsample_;
-  int preview_spectral_idx_;
   bool fov_use_sensor_;
   int sensor_preset_;
   float fov_h_deg_;
@@ -348,11 +352,9 @@ public:
 
   // ---- Constructor ----
   explicit FlareSim(Node *node)
-      : Iop(node), lens_file_(""), flare_gain_(1000.0f), ray_grid_(64),
-        threshold_(2.0f), source_cap_(0.0f), max_sources_(512), downsample_(4),
-        cluster_radius_(0), preview_mode_(false), preview_ray_grid_(16),
-        preview_max_sources_(100), preview_downsample_(8),
-        preview_spectral_idx_(0), fov_use_sensor_(false), sensor_preset_(0),
+      : Iop(node), lens_file_(""), flare_gain_(1000.0f), ray_grid_(100),
+        threshold_(2.0f), source_cap_(0.0f), max_sources_(512), downsample_(1),
+        cluster_radius_(0), fov_use_sensor_(false), sensor_preset_(0),
         fov_h_deg_(40.0f), fov_v_deg_(24.0f), fov_auto_v_(true),
         sensor_w_mm_(36.0f), sensor_h_mm_(24.0f), focal_length_mm_(50.0f),
         ghost_blur_(0.003f), ghost_blur_passes_(3), haze_gain_(0.0f),
@@ -360,8 +362,9 @@ public:
         starburst_scale_(0.15f), aperture_blades_(0), aperture_rotation_(0.0f),
         pupil_jitter_(0), jitter_seed_(0), jitter_auto_seed_(true),
         spectral_idx_(0), show_sources_(false), output_mode_(0),
-        input_channelset_(Mask_RGB), use_light_pos_(false),
-        light_pos_{100.0f, 100.0f}, light_color_{1.0f, 1.0f, 1.0f} {
+        input_channelset_(Mask_RGB), use_light_pos_(true),
+        light_pos_{100.0f, 100.0f}, light_color_{1.0f, 1.0f, 1.0f},
+        light_size_px_(1.0f) {
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
       pair_enabled_[k] = true;
     for (int k = 0; k < MAX_PAIRS_UI; ++k)
@@ -487,6 +490,7 @@ public:
     Float_knob(f, &flare_gain_, "flare_gain", "Flare Gain");
     Tooltip(f, "Ghost intensity multiplier.");
     Int_knob(f, &ray_grid_, "ray_grid", "Ray Grid (NxN)");
+    SetRange(f, 1, 2000);
     Tooltip(f, "NxN entrance-pupil samples per source. "
                "Higher = smoother ghosts, longer render time.");
 
@@ -553,7 +557,7 @@ public:
            "brightest highlights "
            "in pixels is a good starting point (e.g. 20-50 for a typical "
            "headlight).");
-    Divider(f, "Manual Light Position");
+    Divider(f, "Light Position");
     Bool_knob(f, &use_light_pos_, "use_light_pos", "Use Light Position");
     Tooltip(f, "When enabled, the flare is driven by the position and colour "
                "specified below, instead of being automatically extracted from "
@@ -561,43 +565,14 @@ public:
     XY_knob(f, light_pos_, "light_pos", "Light Position (px)");
     Tooltip(f, "Position of the light source in pixel coordinates. Only used "
                "when Manual Light Position is enabled.");
+    Float_knob(f, &light_size_px_, "light_size", "Light Size (px)");
+    SetRange(f, 1.0f, 100.0f);
+    Tooltip(f,
+            "Size of the light source in pixels. Only used when Manual Light "
+            "Position is enabled.");
     Color_knob(f, light_color_, "light_color", "Light Color");
     Tooltip(f, "Colour of the light source. Only used when Manual Light "
                "Position is enabled.");
-
-    Divider(f, "Preview Mode");
-    Bool_knob(f, &preview_mode_, "preview_mode", "Enable Preview Mode");
-    Tooltip(f, "When on, the settings below replace Ray Grid, Max Sources, "
-               "Downsample, and "
-               "Spectral Samples for the render. Dial in high-quality final "
-               "settings in the "
-               "Ghost and Spectral tabs, then enable this for a fast "
-               "interactive preview.");
-    static const char *const kPrevSpecNames[] = {"3 (R/G/B)", "5",  "7",
-                                                 "9",         "11", nullptr};
-    Int_knob(f, &preview_ray_grid_, "preview_ray_grid", "Ray Grid (NxN)");
-    Tooltip(
-        f,
-        "Preview ray grid size. Default 16 gives a quick but usable result.");
-    Int_knob(f, &preview_max_sources_, "preview_max_sources", "Max Sources");
-    Tooltip(f, "Preview source limit.\n\n"
-               "Note: brightness compensation is applied automatically for the "
-               "Downsample "
-               "difference between preview and final, but NOT for Max Sources. "
-               "If Max Sources "
-               "is actively capping the count in preview (i.e. more sources "
-               "exist than the "
-               "limit), the preview will appear dimmer than the final render. "
-               "To avoid this, "
-               "keep preview Max Sources equal to or higher than the final Max "
-               "Sources value, "
-               "and rely on Downsample as the primary speed lever.");
-    Int_knob(f, &preview_downsample_, "preview_downsample", "Downsample");
-    Tooltip(f, "Preview downsample stride. 8 samples 1/64th of pixels — fast "
-               "source detection.");
-    Enumeration_knob(f, &preview_spectral_idx_, kPrevSpecNames,
-                     "preview_spectral", "Spectral Samples");
-    Tooltip(f, "Preview spectral quality. '3 (R/G/B)' is fastest.");
 
     Divider(f, "Camera");
     Bool_knob(f, &fov_use_sensor_, "fov_use_sensor", "Use Sensor Size");
@@ -752,11 +727,11 @@ public:
       }
       return 1;
     }
-    if (k->is("preview_mode")) {
-      knob("preview_ray_grid")->enable(preview_mode_);
-      knob("preview_max_sources")->enable(preview_mode_);
-      knob("preview_downsample")->enable(preview_mode_);
-      knob("preview_spectral")->enable(preview_mode_);
+    if (k->is("use_light_pos")) {
+      const bool use_pos = use_light_pos_;
+      knob("light_pos")->enable(use_pos);
+      knob("light_size")->enable(use_pos);
+      knob("light_color")->enable(use_pos);
       return 1;
     }
     if (k->is("fov_use_sensor") || k->is("fov_auto_v")) {
@@ -921,16 +896,10 @@ public:
     }
 
     // Resolve preview / final settings
-    const int eff_ray_grid = preview_mode_ ? preview_ray_grid_ : ray_grid_;
-    const int eff_max_sources =
-        preview_mode_ ? preview_max_sources_ : max_sources_;
-    const int eff_downsample =
-        preview_mode_ ? preview_downsample_ : downsample_;
-    const int eff_spectral_idx =
-        preview_mode_ ? preview_spectral_idx_ : spectral_idx_;
-    if (preview_mode_)
-      printf("FlareSim: [PREVIEW MODE] grid=%d  max_src=%d  ds=%d  spec=%d\n",
-             eff_ray_grid, eff_max_sources, eff_downsample, eff_spectral_idx);
+    const int eff_ray_grid = ray_grid_;
+    const int eff_max_sources = max_sources_;
+    const int eff_downsample = downsample_;
+    const int eff_spectral_idx = spectral_idx_;
 
     const int x0 = pending_x0_;
     const int y0 = pending_y0_;
@@ -1019,13 +988,39 @@ public:
       // specified position and colour as a single bright source.
       const float ndc_x = (light_pos_[0] - fmt_cx) / pending_fmt_w_;
       const float ndc_y = (light_pos_[1] - fmt_cy) / pending_fmt_h_;
-      BrightPixel bp_out;
-      bp_out.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
-      bp_out.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
-      bp_out.r = light_color_[0] * flare_gain_;
-      bp_out.g = light_color_[1] * flare_gain_;
-      bp_out.b = light_color_[2] * flare_gain_;
-      sources.push_back(bp_out);
+      BrightPixel bp;
+      bp.angle_x = std::atan(ndc_x * 2.0f * tan_half_h);
+      bp.angle_y = std::atan(ndc_y * 2.0f * tan_half_v);
+      bp.r = light_color_[0] * flare_gain_;
+      bp.g = light_color_[1] * flare_gain_;
+      bp.b = light_color_[2] * flare_gain_;
+      sources.push_back(bp);
+      if (light_size_px_ > 1.0f) {
+        const float half_size = light_size_px_ * 0.5f;
+        for (int sx = 0; sx <= light_size_px_; ++sx) {
+          for (int sy = 0; sy <= light_size_px_; ++sy) {
+            const float off_x = (sx - half_size);
+            const float off_y = (sy - half_size);
+            const float dist = std::sqrt(off_x * off_x + off_y * off_y);
+            if (dist > half_size)
+              continue;
+
+            const float falloff =
+                (half_size > 1.0f)
+                    ? smoothstep(1.0f - dist / half_size, 0.0f, 1.0f)
+                    : 1.0f;
+            const float off_ndc_x = off_x / pending_fmt_w_;
+            const float off_ndc_y = off_y / pending_fmt_h_;
+            BrightPixel bp_out;
+            bp_out.angle_x = std::atan((ndc_x + off_ndc_x) * 2.0f * tan_half_h);
+            bp_out.angle_y = std::atan((ndc_y + off_ndc_y) * 2.0f * tan_half_v);
+            bp_out.r = light_color_[0] * flare_gain_ * falloff;
+            bp_out.g = light_color_[1] * flare_gain_ * falloff;
+            bp_out.b = light_color_[2] * flare_gain_ * falloff;
+            sources.push_back(bp_out);
+          }
+        }
+      }
     } else {
       for (int dyi = 0; dyi < dh; ++dyi) {
         for (int dxi = 0; dxi < dw; ++dxi) {
@@ -1163,10 +1158,7 @@ public:
     // in preview mode and is actively limiting the source count, some
     // brightness difference will remain. Keep preview Max Sources high (or 0)
     // to avoid this.
-    const float ds_ratio =
-        preview_mode_
-            ? ((float)eff_downsample / (float)std::max(downsample_, 1))
-            : 1.0f;
+    const float ds_ratio = 1.0f;
     cfg.gain = flare_gain_ * ds_ratio * ds_ratio;
     cfg.aperture_blades = aperture_blades_;
     cfg.aperture_rotation_deg = aperture_rotation_;

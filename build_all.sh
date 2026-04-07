@@ -26,7 +26,7 @@
 
 set -euo pipefail
 
-VERSIONS="13 14 15 16 17"
+VERSIONS="15.1 16.0 17.0"
 NUKE_ROOT="/usr/local"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DIST_DIR="${SCRIPT_DIR}/dist"
@@ -62,7 +62,7 @@ for VERSION in $VERSIONS; do
     echo "--- Nuke ${VERSION} ---"
 
     # Find Nuke installation (e.g. "Nuke16.0v1") — pick newest patch if multiple exist.
-    NUKE_DIR=$(find "${NUKE_ROOT}" -maxdepth 1 -type d -name "nuke${VERSION}.*" 2>/dev/null \
+    NUKE_DIR=$(find "${NUKE_ROOT}" -maxdepth 1 -type d -name "nuke${VERSION}*" 2>/dev/null \
                | sort -V | tail -1)
 
     if [[ -z "${NUKE_DIR}" ]]; then
@@ -83,7 +83,7 @@ for VERSION in $VERSIONS; do
     echo "  Found: ${NUKE_DIR}"
 
     # Nuke 17 targets VFX CY2026 which specifies C++20; all others use C++17.
-    if [[ "${VERSION}" -ge 17 ]]; then
+    if [[ "${VERSION}" == 17.* ]]; then
         CXX_STANDARD=20
     else
         CXX_STANDARD=17
@@ -130,7 +130,7 @@ for VERSION in $VERSIONS; do
         continue
     fi
 
-    OUT_DIR="${DIST_DIR}/nuke${VERSION}"
+    OUT_DIR="${DIST_DIR}/${VERSION}"
     mkdir -p "${OUT_DIR}"
     cp "${SO_SRC}" "${OUT_DIR}/FlareSim.so"
 
