@@ -17,5 +17,5 @@ nuke.menu('Nodes').addCommand(
 try:
     import FlareSim_LensBrowser
     FlareSim_LensBrowser.register()
-except Exception as e:
+except Exception:
     nuke.warning(f'FlareSim: could not load lens browser: {e}')

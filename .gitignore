@@ -18,3 +18,6 @@ original_code/
 flare.pdf
 lenses/lens_files_v2/
 release_packages/
+build/
+bin/
+obj/
