@@ -1,0 +1,46 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Nuke 17 (MSVC x64)",
+            "intelliSenseMode": "windows-msvc-x64",
+            "cppStandard": "c++17",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "C:/Program Files/Nuke17.0v1/include"
+            ],
+            "defines": [
+                "NOMINMAX",
+                "_USE_MATH_DEFINES",
+                "WIN32_LEAN_AND_MEAN",
+                "_WINDOWS",
+                "_USRDLL",
+                "FX_STATIC_API",
+                "BUILD_NDKPLUGIN"
+            ],
+            "compilerPath": "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/cl.exe",
+            "compilerArgs": [
+                "/std:c++17",
+                "/MD"
+            ]
+        },
+        {
+            "name": "Nuke 17 (GCC x64 Linux)",
+            "intelliSenseMode": "linux-gcc-x64",
+            "cppStandard": "c++17",
+            "includePath": [
+                "${workspaceFolder}/src",
+                "/cgsoft/foundry/nuke17.0v1/include"
+            ],
+            "defines": [
+                "LINUX",
+                "_GNU_SOURCE"
+            ],
+            "compilerPath": "/usr/bin/g++",
+            "compilerArgs": [
+                "-std=c++17",
+                "-fPIC"
+            ]
+        }
+    ]
+}
