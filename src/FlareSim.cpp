@@ -491,6 +491,7 @@ public:
     Tooltip(f, "Ghost intensity multiplier.");
     Int_knob(f, &ray_grid_, "ray_grid", "Ray Grid (NxN)");
     SetRange(f, 1, 2000);
+    SetFlags(f, Knob::SLIDER);
     Tooltip(f, "NxN entrance-pupil samples per source. "
                "Higher = smoother ghosts, longer render time.");
 
